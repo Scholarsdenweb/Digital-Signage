@@ -1,0 +1,408 @@
+// Digital Signage Management — Prisma schema
+// Normalized schema with UUID PKs and targeted indexes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Auth / Users ───────────────────────────
+
+enum RoleName {
+  ADMIN
+  HANDLER
+}
+
+model Role {
+  id    String   @id @default(uuid())
+  name  RoleName @unique
+  users User[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  roleId       String
+  role         Role     @relation(fields: [roleId], references: [id])
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  screenHandlers ScreenHandler[]
+  content        Content[]
+  refreshTokens  RefreshToken[]
+  activityLogs   ActivityLog[]
+
+  @@index([roleId])
+  @@index([active])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────── Screens ───────────────────────────
+
+enum ScreenStatus {
+  UNREGISTERED
+  ACTIVE
+  MAINTENANCE
+  DISABLED
+}
+
+enum Orientation {
+  LANDSCAPE
+  PORTRAIT
+}
+
+model Screen {
+  id               String       @id @default(uuid())
+  screenKey        String       @unique // permanent identity e.g. SCREEN-001
+  name             String
+  location         String?
+  orientation      Orientation  @default(LANDSCAPE)
+  width            Int
+  height           Int
+  devicePixelRatio Float?
+  status           ScreenStatus @default(ACTIVE)
+  maintenanceUntil DateTime? // null while active; set when in timed maintenance
+  screenGroupId    String?
+  screenGroup      ScreenGroup? @relation(fields: [screenGroupId], references: [id])
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  deviceCredential DeviceCredential?
+  playlist         Playlist?
+  handlers         ScreenHandler[]
+  heartbeats       DeviceHeartbeat[]
+  commands         DeviceCommand[]
+  birthdayInstances BirthdayInstance[]
+
+  @@index([screenKey])
+  @@index([status])
+  @@index([screenGroupId])
+}
+
+model ScreenHandler {
+  id         String   @id @default(uuid())
+  screenId   String
+  screen     Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([screenId, userId])
+  @@index([userId])
+  @@index([screenId])
+}
+
+model ScreenGroup {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  screens          Screen[]
+  birthdayInstances BirthdayInstance[]
+}
+
+// ─────────────────────────── Device credentials & pairing ───────────────────────────
+
+model PairingRequest {
+  id               String      @id @default(uuid())
+  pairingCode      String      @unique
+  width            Int
+  height           Int
+  devicePixelRatio Float?
+  orientation      Orientation
+  userAgent        String?
+  platform         String?
+  claimed          Boolean     @default(false)
+  screenId         String? // set once claimed
+  // One-time device-token handoff: set at claim, returned to the device exactly
+  // once via pair-status, then cleared. Survives a backend restart / multi-instance.
+  deviceToken      String?
+  tokenDeliveredAt DateTime?
+  expiresAt        DateTime
+  createdAt        DateTime    @default(now())
+
+  @@index([pairingCode])
+  @@index([expiresAt])
+}
+
+model DeviceCredential {
+  id         String    @id @default(uuid())
+  screenId   String    @unique
+  screen     Screen    @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique // HMAC of the opaque device token; raw token only shown once
+  revokedAt  DateTime?
+  lastAuthAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([tokenHash])
+}
+
+// ─────────────────────────── Media & content ───────────────────────────
+
+enum MediaKind {
+  IMAGE
+  VIDEO
+}
+
+model MediaObject {
+  id         String    @id @default(uuid())
+  provider   String // 'local' | 's3'
+  storageKey String // key/path within the provider
+  mimeType   String
+  kind       MediaKind
+  sizeBytes  Int
+  width      Int?
+  height     Int?
+  durationSec Float?
+  checksum   String?
+  createdAt  DateTime  @default(now())
+
+  content Content[]
+  history ContentHistory[]
+
+  @@index([storageKey])
+}
+
+enum ContentType {
+  TIMETABLE
+  ACHIEVEMENT
+  GENERAL
+  BIRTHDAY
+}
+
+enum ContentStatus {
+  DRAFT
+  LIVE
+  ARCHIVED
+}
+
+enum FitMode {
+  COVER // fill the screen edge-to-edge, cropping overflow
+  CONTAIN // show the whole media, letterboxed (no cropping)
+}
+
+model Content {
+  id                 String        @id @default(uuid())
+  title              String
+  type               ContentType
+  status             ContentStatus @default(DRAFT)
+  fitMode            FitMode       @default(COVER)
+  defaultDurationSec Int           @default(15)
+  ownerId            String
+  owner              User          @relation(fields: [ownerId], references: [id])
+  mediaObjectId      String
+  media              MediaObject   @relation(fields: [mediaObjectId], references: [id])
+  // birthday-generated content links back to the instance
+  birthdayInstanceId String?       @unique
+  birthdayInstance   BirthdayInstance? @relation(fields: [birthdayInstanceId], references: [id])
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  playlistItems PlaylistItem[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([type])
+}
+
+// ─────────────────────────── Playlist (draft + live) ───────────────────────────
+
+model Playlist {
+  id             String   @id @default(uuid())
+  screenId       String   @unique
+  screen         Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  liveVersion    Int      @default(0)
+  livePublishedAt DateTime?
+  draftUpdatedAt DateTime @default(now())
+
+  items PlaylistItem[]
+
+  @@index([screenId])
+}
+
+enum PlaylistStage {
+  DRAFT
+  LIVE
+}
+
+model PlaylistItem {
+  id          String        @id @default(uuid())
+  playlistId  String
+  playlist    Playlist      @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  stage       PlaylistStage
+  position    Int
+  durationSec Int
+  contentId   String
+  content     Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, stage, position])
+  @@index([playlistId, stage])
+  @@index([contentId])
+}
+
+// ─────────────────────────── History ───────────────────────────
+
+enum HistoryReason {
+  REPLACED
+  REMOVED
+}
+
+model ContentHistory {
+  id             String        @id @default(uuid())
+  // snapshot of the content that left a LIVE playlist
+  originalContentId String
+  title          String
+  type           ContentType
+  ownerId        String // handler who originally uploaded (for restore permission)
+  mediaObjectId  String
+  media          MediaObject   @relation(fields: [mediaObjectId], references: [id])
+  screenId       String // which screen it was live on
+  durationSec    Int
+  reason         HistoryReason
+  publishedAt    DateTime? // when it had been published
+  archivedAt     DateTime      @default(now())
+  expiresAt      DateTime // archivedAt + retention
+  restoredAt     DateTime?
+
+  @@index([ownerId])
+  @@index([expiresAt])
+  @@index([screenId])
+  @@index([originalContentId])
+}
+
+// ─────────────────────────── Birthday ───────────────────────────
+
+model Student {
+  id          String   @id @default(uuid())
+  studentCode String   @unique
+  name        String
+  dateOfBirth DateTime @db.Date
+  batch       String?
+  course      String?
+  photoMediaId String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  birthdayInstances BirthdayInstance[]
+
+  // month/day extracted for fast "birthday today" queries
+  birthMonth Int
+  birthDay   Int
+
+  @@index([birthMonth, birthDay])
+  @@index([active])
+}
+
+model BirthdayTemplate {
+  id                 String   @id @default(uuid())
+  name               String
+  design             Json
+  defaultDurationSec Int      @default(10)
+  isDefault          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  instances BirthdayInstance[]
+}
+
+model BirthdayInstance {
+  id            String           @id @default(uuid())
+  studentId     String
+  student       Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  templateId    String
+  template      BirthdayTemplate @relation(fields: [templateId], references: [id])
+  forDate       DateTime         @db.Date
+  // assignment
+  screenId      String?
+  screen        Screen?          @relation(fields: [screenId], references: [id])
+  screenGroupId String?
+  screenGroup   ScreenGroup?     @relation(fields: [screenGroupId], references: [id])
+  createdAt     DateTime         @default(now())
+
+  content Content?
+
+  @@unique([studentId, forDate, screenId, screenGroupId])
+  @@index([forDate])
+  @@index([studentId])
+}
+
+// ─────────────────────────── Device monitoring ───────────────────────────
+
+model DeviceHeartbeat {
+  id             String   @id @default(uuid())
+  screenId       String
+  screen         Screen   @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  status         String // online | offline | maintenance
+  currentContent String?
+  playerVersion  String?
+  resolution     String?
+  orientation    String?
+  cacheBytes     Int?
+  cachedItems    Int?
+  online         Boolean  @default(true)
+  wsConnected    Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@index([screenId, createdAt])
+}
+
+enum CommandStatus {
+  PENDING
+  DELIVERED
+  ACKED
+  EXPIRED
+}
+
+model DeviceCommand {
+  id          String        @id @default(uuid())
+  screenId    String
+  screen      Screen        @relation(fields: [screenId], references: [id], onDelete: Cascade)
+  command     String
+  payload     Json?
+  status      CommandStatus @default(PENDING)
+  issuedById  String?
+  createdAt   DateTime      @default(now())
+  deliveredAt DateTime?
+  ackedAt     DateTime?
+
+  @@index([screenId, status])
+}
+
+// ─────────────────────────── Audit ───────────────────────────
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  actorType  String   @default("USER") // USER | DEVICE | SYSTEM
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

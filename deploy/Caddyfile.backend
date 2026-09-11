@@ -1,0 +1,11 @@
+# Backend-only reverse proxy for the split deployment
+# (frontends on Netlify, backend on this VPS).
+#
+# {$API_DOMAIN} e.g. api.display.example.com — point its DNS at this VPS.
+# Caddy obtains + renews TLS automatically. All paths (REST, /media, /ws) go
+# to the backend; WebSocket upgrades are handled automatically.
+
+{$API_DOMAIN} {
+	encode gzip zstd
+	reverse_proxy backend:4000
+}

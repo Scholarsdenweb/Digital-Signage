@@ -1,0 +1,28 @@
+# Single-origin reverse proxy with automatic HTTPS (Let's Encrypt).
+# Caddy obtains + renews the TLS cert automatically once DNS for {$DOMAIN}
+# points at this server. HTTPS is required for the player's service worker,
+# fullscreen/kiosk, and secure WebSocket.
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	# Backend REST API — /api/* is stripped before proxying (backend mounts at root)
+	handle_path /api/* {
+		reverse_proxy backend:4000
+	}
+
+	# WebSocket endpoint (Caddy upgrades the connection automatically)
+	handle /ws {
+		reverse_proxy backend:4000
+	}
+
+	# Display player (built with base /player/)
+	handle /player/* {
+		reverse_proxy player:80
+	}
+
+	# Management app (SPA) at the root
+	handle {
+		reverse_proxy web:80
+	}
+}

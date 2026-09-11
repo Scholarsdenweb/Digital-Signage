@@ -1,0 +1,56 @@
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-2: #273449;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --primary: #f59e0b;
+  --primary-hover: #d97706;
+  --green: #16a34a;
+  --red: #dc2626;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+a { color: inherit; text-decoration: none; }
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+button.primary { background: var(--primary); color: #1a1206; font-weight: 700; }
+button.primary:hover { background: var(--primary-hover); }
+button.danger { background: var(--red); color: #fff; }
+button.ghost { background: transparent; border: 1px solid var(--border); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+input, select, textarea {
+  font: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 9px 12px;
+  width: 100%;
+}
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+.row { display: flex; gap: 12px; align-items: center; }
+.grid { display: grid; gap: 16px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge .dot { width: 8px; height: 8px; border-radius: 50%; }
+.muted { color: var(--muted); }
+.stat { font-size: 30px; font-weight: 800; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: grid; place-items: center; z-index: 100; }
+.modal { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px; width: min(680px, 92vw); max-height: 90vh; overflow: auto; }
+.empty { text-align: center; padding: 48px; color: var(--muted); }

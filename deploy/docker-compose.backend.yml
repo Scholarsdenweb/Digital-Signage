@@ -1,0 +1,64 @@
+# Backend-only production stack for a VPS (frontends hosted separately on Netlify).
+# Postgres + backend + Caddy (auto-HTTPS on the API domain). Only Caddy is exposed.
+#
+# Run from the repo root:
+#   docker compose --env-file .env.production -f deploy/docker-compose.backend.yml up -d --build
+#   docker compose --env-file .env.production -f deploy/docker-compose.backend.yml \
+#     exec backend npx -w @dsm/backend tsx prisma/seed.ts     # first run only
+#
+# Required in .env.production for this split:
+#   API_DOMAIN=api.display.example.com
+#   BACKEND_PUBLIC_URL=https://api.display.example.com
+#   CORS_ORIGINS=https://<your-site>.netlify.app        # the Netlify frontend origin(s)
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: apps/backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ../.env.production
+    volumes:
+      - media-data:/data/storage
+    expose:
+      - '4000'
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      API_DOMAIN: ${API_DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile.backend:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  db-data:
+  media-data:
+  caddy-data:
+  caddy-config:

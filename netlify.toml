@@ -1,0 +1,45 @@
+# Netlify hosts BOTH frontends on one site:
+#   /          -> management app (apps/web)
+#   /player/   -> display player (apps/player, built with base /player/)
+#
+# Set these as Netlify environment variables (Site settings → Environment), pointing
+# at your VPS backend:
+#   VITE_API_URL = https://api.display.example.com
+#   VITE_WS_URL  = wss://api.display.example.com
+# (They are baked into the build, so redeploy after changing them.)
+#
+# Also set the backend's CORS_ORIGINS to this Netlify site's URL.
+
+[build]
+  # Build shared package, then both apps, then merge their dist folders.
+  command = """
+    npm install &&
+    npm run build:shared &&
+    npm run build -w @dsm/web &&
+    npm run build -w @dsm/player &&
+    rm -rf netlify-publish &&
+    cp -r apps/web/dist netlify-publish &&
+    mkdir -p netlify-publish/player &&
+    cp -r apps/player/dist/* netlify-publish/player/
+  """
+  publish = "netlify-publish"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# The player service worker must not be cached long (scope /player/).
+[[headers]]
+  for = "/player/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# SPA fallbacks — player first (more specific), then the management app.
+[[redirects]]
+  from = "/player/*"
+  to = "/player/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

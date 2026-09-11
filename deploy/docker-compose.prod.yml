@@ -1,0 +1,84 @@
+# Production stack: Postgres + backend + web + player behind a Caddy TLS proxy.
+#
+# Run from the repo root:
+#   docker compose --env-file .env.production -f deploy/docker-compose.prod.yml up -d --build
+#   docker compose --env-file .env.production -f deploy/docker-compose.prod.yml \
+#     exec backend npx -w @dsm/backend tsx prisma/seed.ts        # first run only
+#
+# Only Caddy is exposed to the internet (80/443); everything else is internal.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: apps/backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ../.env.production
+    volumes:
+      - media-data:/data/storage
+    expose:
+      - '4000'
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
+    restart: unless-stopped
+    expose:
+      - '80'
+
+  player:
+    build:
+      context: ..
+      dockerfile: apps/player/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
+    restart: unless-stopped
+    expose:
+      - '80'
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - web
+      - player
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  db-data:
+  media-data:
+  caddy-data:
+  caddy-config:
