@@ -43,9 +43,13 @@ export function PlayerScreen({ onDisabled }: { onDisabled: () => void }) {
     [token, playlist],
   );
 
-  // ── Boot: sync + connect socket + heartbeat + watchdog ──
+  // Always call the latest syncPlaylist from timers/handlers set up once at boot.
+  const syncRef = useRef(syncPlaylist);
+  syncRef.current = syncPlaylist;
+
+  // ── Boot: sync + connect socket + heartbeat + poll + watchdog ──
   useEffect(() => {
-    void syncPlaylist({ urgent: !playlist });
+    void syncRef.current({ urgent: true });
 
     const socket = new DeviceSocket(token, handleWsMessage, setOnline);
     socket.connect();
@@ -54,9 +58,13 @@ export function PlayerScreen({ onDisabled }: { onDisabled: () => void }) {
     const hb = window.setInterval(sendHeartbeat, 30000);
     void sendHeartbeat();
 
+    // Safety net: re-sync the playlist every 60s so a publish always reaches the
+    // screen automatically even if the WebSocket is briefly disconnected.
+    const poll = window.setInterval(() => void syncRef.current(), 60000);
+
     const onlineHandler = () => {
       setOnline(true);
-      void syncPlaylist(); // resync changed media on reconnect
+      void syncRef.current(); // resync changed media on reconnect
     };
     const offlineHandler = () => setOnline(false);
     window.addEventListener('online', onlineHandler);
@@ -67,6 +75,7 @@ export function PlayerScreen({ onDisabled }: { onDisabled: () => void }) {
     return () => {
       socket.close();
       window.clearInterval(hb);
+      window.clearInterval(poll);
       window.removeEventListener('online', onlineHandler);
       window.removeEventListener('offline', offlineHandler);
     };
@@ -94,16 +103,18 @@ export function PlayerScreen({ onDisabled }: { onDisabled: () => void }) {
   }, [maintenanceUntil]);
 
   function advance() {
+    // If a new playlist was published while this item was playing, apply it now
+    // (at the safe boundary between items) — no need to wait for the whole loop.
+    if (pending.current) {
+      const next = pending.current;
+      pending.current = null;
+      setPlaylist(next);
+      setIndex(0);
+      return;
+    }
     setIndex((i) => {
-      const next = i + 1;
       const list = playlist?.items ?? [];
-      // At the loop boundary, apply any pending playlist update.
-      if (next >= list.length && pending.current) {
-        setPlaylist(pending.current);
-        pending.current = null;
-        return 0;
-      }
-      return list.length ? next % list.length : 0;
+      return list.length ? (i + 1) % list.length : 0;
     });
   }
 
