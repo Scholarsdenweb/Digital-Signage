@@ -14,42 +14,41 @@ export function PlayerScreen({ onDisabled }: { onDisabled: () => void }) {
   const [online, setOnline] = useState(navigator.onLine);
   const [maintenanceUntil, setMaintenanceUntil] = useState<number | null>(null);
 
-  // pending playlist applied only at the next safe playback boundary
-  const pending = useRef<PlaylistDto | null>(null);
   const socketRef = useRef<DeviceSocket | null>(null);
   const advanceTimer = useRef<number>();
+  // Latest applied playlist version + a live ref to the playlist (avoids stale closures).
+  const versionRef = useRef<number>(deviceStore.getPlaylist()?.version ?? -1);
+  const playlistRef = useRef<PlaylistDto | null>(playlist);
+  playlistRef.current = playlist;
 
   const items = playlist?.items ?? [];
   const current: PlaylistItemDto | undefined = items[index];
 
-  // ── Fetch live playlist (falls back to cache when offline) ──
-  const syncPlaylist = useCallback(
-    async (opts: { urgent?: boolean } = {}) => {
-      try {
-        const live = await deviceApi.getPlaylist(token);
-        deviceStore.setPlaylist(live);
-        if (!playlist || opts.urgent) {
-          setPlaylist(live);
-          setIndex(0);
-        } else {
-          pending.current = live; // apply at boundary
-        }
-        // preload media for smooth playback + offline
-        precacheMedia(live.items.map((i) => i.content.media.url));
-      } catch {
-        // offline: keep cached playlist
+  // ── Fetch live playlist and apply it IMMEDIATELY when it changed ──
+  // (restarts from the first item; unchanged versions are ignored so playback
+  // isn't interrupted for nothing). Falls back to cached content when offline.
+  const syncPlaylist = useCallback(async () => {
+    try {
+      const live = await deviceApi.getPlaylist(token);
+      deviceStore.setPlaylist(live);
+      if (live.version !== versionRef.current) {
+        versionRef.current = live.version;
+        setPlaylist(live);
+        setIndex(0); // apply now, don't wait for the current item to finish
       }
-    },
-    [token, playlist],
-  );
+      precacheMedia(live.items.map((i) => i.content.media.url));
+    } catch {
+      // offline: keep cached playlist
+    }
+  }, [token]);
 
-  // Always call the latest syncPlaylist from timers/handlers set up once at boot.
+  // Stable ref so timers/socket handlers created once at boot call the latest sync.
   const syncRef = useRef(syncPlaylist);
   syncRef.current = syncPlaylist;
 
   // ── Boot: sync + connect socket + heartbeat + poll + watchdog ──
   useEffect(() => {
-    void syncRef.current({ urgent: true });
+    void syncRef.current();
 
     const socket = new DeviceSocket(token, handleWsMessage, setOnline);
     socket.connect();
@@ -103,17 +102,8 @@ export function PlayerScreen({ onDisabled }: { onDisabled: () => void }) {
   }, [maintenanceUntil]);
 
   function advance() {
-    // If a new playlist was published while this item was playing, apply it now
-    // (at the safe boundary between items) — no need to wait for the whole loop.
-    if (pending.current) {
-      const next = pending.current;
-      pending.current = null;
-      setPlaylist(next);
-      setIndex(0);
-      return;
-    }
     setIndex((i) => {
-      const list = playlist?.items ?? [];
+      const list = playlistRef.current?.items ?? [];
       return list.length ? (i + 1) % list.length : 0;
     });
   }
@@ -126,7 +116,7 @@ export function PlayerScreen({ onDisabled }: { onDisabled: () => void }) {
       case WS.CONTENT_REMOVED:
       case WS.QUEUE_REORDERED:
       case WS.SYNC_CONTENT:
-        void syncPlaylist({ urgent: (msg.data as any)?.urgent });
+        void syncRef.current(); // apply the published change immediately
         break;
       case WS.ENTER_MAINTENANCE: {
         const until = (msg.data as any)?.until;
