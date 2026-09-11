@@ -21,6 +21,11 @@ import { mediaRouter } from './modules/media/media.routes.js';
 export function createApp() {
   const app = express();
 
+  // Behind one reverse proxy (nginx/Caddy). Trust it so req.ip and the rate-limiter
+  // use the real client IP from X-Forwarded-For. The backend is never exposed
+  // directly to the internet in either deploy topology, so trusting 1 hop is safe.
+  app.set('trust proxy', 1);
+
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' }, // media served to player origin
