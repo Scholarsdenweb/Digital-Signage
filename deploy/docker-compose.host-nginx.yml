@@ -1,0 +1,67 @@
+# All-on-VPS behind an EXISTING host nginx (which already serves other sites).
+# The app binds to localhost-only ports; the host nginx terminates TLS and
+# reverse-proxies jatsolutions.in to these. No Caddy, no grabbing 80/443.
+#
+#   backend → 127.0.0.1:4000
+#   web     → 127.0.0.1:8080
+#   player  → 127.0.0.1:8081
+#
+# Run from the repo root:
+#   docker compose --env-file .env.production -f deploy/docker-compose.host-nginx.yml up -d --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: apps/backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ../.env.production
+    volumes:
+      - media-data:/data/storage
+    ports:
+      - '127.0.0.1:4000:4000'
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8080:80'
+
+  player:
+    build:
+      context: ..
+      dockerfile: apps/player/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8081:80'
+
+volumes:
+  db-data:
+  media-data:
