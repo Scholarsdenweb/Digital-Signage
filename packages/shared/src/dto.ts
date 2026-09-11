@@ -97,6 +97,9 @@ export const replacePlaylistItemSchema = z.object({
   contentId: z.string().uuid(),
   durationSec: z.number().int().min(1).max(3600).optional(),
 });
+export const updateItemDurationSchema = z.object({
+  durationSec: z.number().int().min(1).max(3600),
+});
 export const reorderPlaylistSchema = z.object({
   /** full ordered list of playlistItemIds */
   itemIds: z.array(z.string().uuid()).min(1),

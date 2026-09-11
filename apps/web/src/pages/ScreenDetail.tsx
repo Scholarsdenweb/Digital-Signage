@@ -112,6 +112,17 @@ export function ScreenDetail() {
     }
   }
 
+  async function changeDuration(itemId: string, durationSec: number) {
+    try {
+      setPlaylist(
+        await api.put<PlaylistDto>(`/screens/${screenId}/playlist/items/${itemId}/duration`, { durationSec }),
+      );
+    } catch (e: any) {
+      toast.push(e.message, 'error');
+      loadPlaylist();
+    }
+  }
+
   async function pickContent(content: ContentDto) {
     try {
       if (picker?.mode === 'add') {
@@ -219,6 +230,7 @@ export function ScreenDetail() {
                   index={idx}
                   onReplace={() => setPicker({ mode: 'replace', itemId: item.id })}
                   onRemove={() => removeItem(item.id)}
+                  onDurationChange={(sec) => changeDuration(item.id, sec)}
                 />
               ))}
             </div>
@@ -432,13 +444,24 @@ function SortableItem({
   index,
   onReplace,
   onRemove,
+  onDurationChange,
 }: {
   item: PlaylistItemDto;
   index: number;
   onReplace: () => void;
   onRemove: () => void;
+  onDurationChange: (sec: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+  const [dur, setDur] = useState(String(item.durationSec));
+  useEffect(() => setDur(String(item.durationSec)), [item.durationSec]);
+
+  function commit() {
+    const n = Math.max(1, Math.min(3600, Math.round(Number(dur) || item.durationSec)));
+    setDur(String(n));
+    if (n !== item.durationSec) onDurationChange(n);
+  }
+
   return (
     <div
       ref={setNodeRef}
@@ -461,8 +484,22 @@ function SortableItem({
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600 }}>{item.content.title}</div>
         <div className="muted" style={{ fontSize: 12 }}>
-          {item.content.type} · {item.content.media.kind} · {item.durationSec}s
+          {item.content.type} · {item.content.media.kind}
         </div>
+      </div>
+      <div className="row" style={{ gap: 4 }}>
+        <input
+          type="number"
+          min={1}
+          max={3600}
+          value={dur}
+          onChange={(e) => setDur(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+          title="Seconds this item is shown"
+          style={{ width: 70, padding: '6px 8px', textAlign: 'right' }}
+        />
+        <span className="muted" style={{ fontSize: 12 }}>sec</span>
       </div>
       <button className="ghost" onClick={onReplace}>Replace</button>
       <button className="danger" onClick={onRemove}>Remove</button>

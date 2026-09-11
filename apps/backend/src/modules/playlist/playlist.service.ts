@@ -21,22 +21,30 @@ async function getOrCreatePlaylist(screenId: string) {
 
 /** Ensures a DRAFT working copy exists, seeded from LIVE the first time. */
 async function ensureDraft(tx: Tx, playlistId: string) {
+  const playlist = await tx.playlist.findUnique({ where: { id: playlistId } });
+  // Once initialized, the draft is authoritative — never re-seed (even if empty).
+  if (playlist?.draftInitialized) return;
+
   const draftCount = await tx.playlistItem.count({ where: { playlistId, stage: 'DRAFT' } });
-  if (draftCount > 0) return;
-  const live = await tx.playlistItem.findMany({
-    where: { playlistId, stage: 'LIVE' },
-    orderBy: { position: 'asc' },
-  });
-  if (live.length === 0) return;
-  await tx.playlistItem.createMany({
-    data: live.map((i) => ({
-      playlistId,
-      stage: 'DRAFT' as const,
-      position: i.position,
-      durationSec: i.durationSec,
-      contentId: i.contentId,
-    })),
-  });
+  if (draftCount === 0) {
+    const live = await tx.playlistItem.findMany({
+      where: { playlistId, stage: 'LIVE' },
+      orderBy: { position: 'asc' },
+    });
+    if (live.length > 0) {
+      await tx.playlistItem.createMany({
+        data: live.map((i) => ({
+          playlistId,
+          stage: 'DRAFT' as const,
+          position: i.position,
+          durationSec: i.durationSec,
+          contentId: i.contentId,
+        })),
+      });
+    }
+  }
+  // Mark initialized so future edits (including emptying the draft) are respected.
+  await tx.playlist.update({ where: { id: playlistId }, data: { draftInitialized: true } });
 }
 
 /** Rewrites the DRAFT items with contiguous 0-based positions (avoids unique clashes). */
@@ -169,6 +177,21 @@ export async function replaceItem(
       durationSec: input.durationSec ?? content.defaultDurationSec,
     };
     await rewriteDraft(tx, playlist.id, arr); // position preserved (same index)
+  }, TX_OPTS);
+  return getEditorPlaylist(screenId);
+}
+
+/** Change how long a playlist item is shown (its duration in seconds). */
+export async function updateItemDuration(screenId: string, itemId: string, durationSec: number) {
+  const { playlist } = await getOrCreatePlaylist(screenId);
+  await prisma.$transaction(async (tx) => {
+    await ensureDraft(tx, playlist.id);
+    const item = await tx.playlistItem.findFirst({
+      where: { id: itemId, playlistId: playlist.id, stage: 'DRAFT' },
+    });
+    if (!item) throw NotFound('Playlist item not found');
+    await tx.playlistItem.update({ where: { id: itemId }, data: { durationSec } });
+    await tx.playlist.update({ where: { id: playlist.id }, data: { draftUpdatedAt: new Date() } });
   }, TX_OPTS);
   return getEditorPlaylist(screenId);
 }

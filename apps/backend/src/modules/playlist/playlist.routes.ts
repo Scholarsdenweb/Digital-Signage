@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   addPlaylistItemSchema,
   replacePlaylistItemSchema,
+  updateItemDurationSchema,
   reorderPlaylistSchema,
   publishToSchema,
   PERMISSIONS,
@@ -49,6 +50,14 @@ playlistRouter.put(
   validateBody(replacePlaylistItemSchema),
   asyncHandler(async (req, res) => {
     res.json(await playlist.replaceItem(req.params.screenId, req.params.itemId, req.body));
+  }),
+);
+
+playlistRouter.put(
+  '/items/:itemId/duration',
+  validateBody(updateItemDurationSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await playlist.updateItemDuration(req.params.screenId, req.params.itemId, req.body.durationSec));
   }),
 );
 

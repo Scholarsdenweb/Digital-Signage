@@ -234,6 +234,9 @@ model Playlist {
   liveVersion    Int      @default(0)
   livePublishedAt DateTime?
   draftUpdatedAt DateTime @default(now())
+  // Once true, the DRAFT is the user's working copy and is NEVER re-seeded from
+  // LIVE — so an intentionally emptied draft stays empty (fixes "can't delete last item").
+  draftInitialized Boolean @default(false)
 
   items PlaylistItem[]
 
