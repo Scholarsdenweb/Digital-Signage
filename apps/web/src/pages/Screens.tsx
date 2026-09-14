@@ -37,6 +37,7 @@ export function Screens() {
   const { confirm, node } = useConfirm();
   const [screens, setScreens] = useState<ScreenRow[] | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'online' | 'offline'>('all');
 
   const load = () => api.get<ScreenRow[]>('/screens').then(setScreens).catch(() => setScreens([]));
   useEffect(() => {
@@ -81,6 +82,18 @@ export function Screens() {
     }
   }
 
+  const onlineCount = (screens ?? []).filter((s) => s.online).length;
+  const offlineCount = (screens ?? []).length - onlineCount;
+  const filtered = (screens ?? []).filter((s) =>
+    filter === 'online' ? s.online : filter === 'offline' ? !s.online : true,
+  );
+
+  const FilterChip = ({ id, label }: { id: 'all' | 'online' | 'offline'; label: string }) => (
+    <button className={filter === id ? 'primary' : 'ghost'} onClick={() => setFilter(id)}>
+      {label}
+    </button>
+  );
+
   return (
     <div className="grid">
       {node}
@@ -93,10 +106,20 @@ export function Screens() {
         )}
       </div>
 
+      {screens && screens.length > 0 && (
+        <div className="row" style={{ gap: 6 }}>
+          <FilterChip id="all" label={`All (${screens.length})`} />
+          <FilterChip id="online" label={`Online (${onlineCount})`} />
+          <FilterChip id="offline" label={`Offline (${offlineCount})`} />
+        </div>
+      )}
+
       {!screens ? (
         <Spinner />
       ) : screens.length === 0 ? (
         <Empty text="No screens yet. Pair an Android screen to get started." />
+      ) : filtered.length === 0 ? (
+        <Empty text={`No ${filter} screens.`} />
       ) : (
         <div className="card" style={{ padding: 0 }}>
           <table>
@@ -112,7 +135,7 @@ export function Screens() {
               </tr>
             </thead>
             <tbody>
-              {screens.map((s) => (
+              {filtered.map((s) => (
                 <tr key={s.id}>
                   <td>
                     <Link to={`/screens/${s.id}`} style={{ color: 'var(--primary)', fontWeight: 600 }}>

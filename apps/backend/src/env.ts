@@ -25,7 +25,8 @@ export const env = {
   jwt: {
     accessSecret: required('JWT_ACCESS_SECRET', 'dev-access-secret-change-me-please-32chars'),
     refreshSecret: required('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-me-please-32char'),
-    accessTtl: process.env.JWT_ACCESS_TTL ?? '15m',
+    // Long-lived access token so management users log in about once a week.
+    accessTtl: process.env.JWT_ACCESS_TTL ?? '7d',
     refreshTtl: process.env.JWT_REFRESH_TTL ?? '30d',
   },
   deviceTokenSecret: required('DEVICE_TOKEN_SECRET', 'dev-device-secret-change-me-please-32chars'),
