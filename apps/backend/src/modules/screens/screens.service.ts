@@ -152,6 +152,20 @@ export async function revokeDeviceCredential(screenId: string) {
   wsHub.broadcastToScreen(screenId, { event: WS.DEVICE_REVOKED, data: { screenId } });
 }
 
+/**
+ * Permanently deletes a screen and everything scoped to it (credential, playlist +
+ * items, heartbeats, commands, handler assignments — all cascade). Birthday
+ * instances that targeted this screen are detached (set to null). Any device still
+ * connected is told to stop; if it ever reconnects it returns to the pairing screen.
+ */
+export async function deleteScreen(screenId: string) {
+  const screen = await ensureScreen(screenId);
+  wsHub.broadcastToScreen(screenId, { event: WS.DEVICE_REVOKED, data: { screenId } });
+  await prisma.screen.delete({ where: { id: screenId } });
+  wsHub.broadcastToDashboard({ event: WS.SCREEN_STATUS_CHANGED, data: { screenId, deleted: true } });
+  return { id: screenId, screenKey: screen.screenKey };
+}
+
 async function ensureScreen(screenId: string) {
   const s = await prisma.screen.findUnique({ where: { id: screenId } });
   if (!s) throw NotFound('Screen not found');

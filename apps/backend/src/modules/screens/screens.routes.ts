@@ -88,6 +88,23 @@ screensRouter.post(
   }),
 );
 
+// Admin: permanently delete a screen (and its playlist/credential/history links)
+screensRouter.delete(
+  '/:screenId',
+  requirePermission(PERMISSIONS.MANAGE_SCREENS),
+  asyncHandler(async (req, res) => {
+    const result = await screens.deleteScreen(req.params.screenId);
+    await logActivity({
+      actorId: req.auth!.userId,
+      action: 'SCREEN_DELETE',
+      entityType: 'Screen',
+      entityId: req.params.screenId,
+      metadata: { screenKey: result.screenKey },
+    });
+    res.json({ ok: true });
+  }),
+);
+
 // Admin: device commands (reload/sync/restart/resume)
 screensRouter.post(
   '/:screenId/commands',

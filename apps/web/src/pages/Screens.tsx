@@ -67,6 +67,20 @@ export function Screens() {
     }
   }
 
+  async function deleteScreen(s: ScreenRow) {
+    const ok = await confirm(
+      `PERMANENTLY delete ${s.screenKey} (${s.name})? This removes the screen, its playlist and pairing. This cannot be undone.`,
+    );
+    if (!ok) return;
+    try {
+      await api.del(`/screens/${s.id}`);
+      toast.push(`${s.screenKey} deleted`, 'success');
+      load();
+    } catch (e: any) {
+      toast.push(e.message, 'error');
+    }
+  }
+
   return (
     <div className="grid">
       {node}
@@ -156,6 +170,11 @@ export function Screens() {
                             Disable
                           </button>
                         ))}
+                      {can(PERMISSIONS.MANAGE_SCREENS) && (
+                        <button className="danger" onClick={() => deleteScreen(s)}>
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
