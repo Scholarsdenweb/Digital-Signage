@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { studentSchema, updateStudentSchema, PERMISSIONS } from '@dsm/shared';
+import { studentSchema, updateStudentSchema, bulkStudentsSchema, PERMISSIONS } from '@dsm/shared';
 import { requireAuth } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
 import { validateBody } from '../../middleware/validate.js';
@@ -20,6 +20,37 @@ studentsRouter.get(
   asyncHandler(async (_req, res) =>
     res.json(await prisma.student.findMany({ orderBy: { name: 'asc' } })),
   ),
+);
+
+// Bulk import (from CSV parsed on the client). Upserts by studentCode.
+studentsRouter.post(
+  '/bulk',
+  validateBody(bulkStudentsSchema),
+  asyncHandler(async (req, res) => {
+    let created = 0;
+    let updated = 0;
+    for (const s of req.body.students) {
+      const { date, birthMonth, birthDay } = dobParts(s.dateOfBirth);
+      const existing = await prisma.student.findUnique({ where: { studentCode: s.studentCode } });
+      const data = {
+        name: s.name,
+        dateOfBirth: date,
+        batch: s.batch,
+        course: s.course,
+        birthMonth,
+        birthDay,
+        active: true,
+      };
+      if (existing) {
+        await prisma.student.update({ where: { studentCode: s.studentCode }, data });
+        updated++;
+      } else {
+        await prisma.student.create({ data: { studentCode: s.studentCode, ...data } });
+        created++;
+      }
+    }
+    res.json({ ok: true, created, updated, total: req.body.students.length });
+  }),
 );
 
 studentsRouter.post(

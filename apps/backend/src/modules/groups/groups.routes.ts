@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { screenGroupSchema, PERMISSIONS } from '@dsm/shared';
+import { screenGroupSchema, groupPublishSchema, PERMISSIONS, WS } from '@dsm/shared';
 import { requireAuth } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
 import { validateBody } from '../../middleware/validate.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
-import { NotFound } from '../../lib/errors.js';
+import { NotFound, BadRequest } from '../../lib/errors.js';
+import { publishItemsToScreens } from '../playlist/playlist.service.js';
+import { wsHub } from '../../ws/hub.js';
+import { logActivity } from '../activity/activity.service.js';
 
 export const groupsRouter = Router();
 groupsRouter.use(requireAuth);
@@ -49,6 +52,37 @@ groupsRouter.post(
       data: { screenGroupId: req.params.id },
     });
     res.json({ ok: true });
+  }),
+);
+
+// Publish content to a whole group: REPLACES the live playlist on every screen
+// in the group with the given content (each screen's previous content goes to history).
+groupsRouter.post(
+  '/:id/publish',
+  validateBody(groupPublishSchema),
+  asyncHandler(async (req, res) => {
+    const group = await prisma.screenGroup.findUnique({ where: { id: req.params.id } });
+    if (!group) throw NotFound('Group not found');
+    const screens = await prisma.screen.findMany({ where: { screenGroupId: req.params.id }, select: { id: true } });
+    if (screens.length === 0) throw BadRequest('This group has no screens');
+
+    const results = await publishItemsToScreens(screens.map((s) => s.id), req.body.items);
+    for (const r of results) {
+      wsHub.broadcastToScreen(r.screenId, {
+        event: WS.PLAYLIST_UPDATED,
+        playlistVersion: r.version,
+        data: { screenId: r.screenId, playlistVersion: r.version, urgent: true },
+      });
+      wsHub.broadcastToDashboard({ event: WS.PLAYLIST_UPDATED, data: { screenId: r.screenId, playlistVersion: r.version } });
+    }
+    await logActivity({
+      actorId: req.auth!.userId,
+      action: 'GROUP_PUBLISH',
+      entityType: 'ScreenGroup',
+      entityId: req.params.id,
+      metadata: { screens: results.length, items: req.body.items.length },
+    });
+    res.json({ ok: true, screens: results.length });
   }),
 );
 

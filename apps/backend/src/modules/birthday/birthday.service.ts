@@ -132,11 +132,17 @@ async function systemOwnerId(): Promise<string> {
 }
 
 /**
- * Assign today's birthday content to screens / groups: injects the birthday items
- * into each target screen's LIVE playlist (cyclically appended) and broadcasts.
- * This is system-generated content (the one automatic exception to manual publish).
+ * Assign today's birthday content to screens / groups.
+ *
+ * The currently-running content is kept as-is; every birthday student's post
+ * (10s each) is appended to each target screen's LIVE playlist so it cycles
+ * alongside the existing content. Idempotent: re-running refreshes the birthday
+ * items rather than duplicating them, and it auto-generates today's posts first.
  */
 export async function assignToday(screenIds: string[], screenGroupIds: string[], forDate = todayUtcDate()) {
+  // Make sure today's birthday posts exist (in case students were just added).
+  await generateForDate(forDate);
+
   const groupScreens = await prisma.screen.findMany({
     where: { screenGroupId: { in: screenGroupIds } },
     select: { id: true },
@@ -145,9 +151,10 @@ export async function assignToday(screenIds: string[], screenGroupIds: string[],
 
   const birthdayContents = await prisma.content.findMany({
     where: { type: CONTENT_TYPE.BIRTHDAY, birthdayInstance: { forDate } },
-    include: { birthdayInstance: true },
+    include: { birthdayInstance: { include: { student: true } } },
+    orderBy: { createdAt: 'asc' },
   });
-  if (birthdayContents.length === 0) return { assigned: 0, screens: targetScreenIds.length };
+  const birthdayIds = birthdayContents.map((c) => c.id);
 
   for (const screenId of targetScreenIds) {
     const playlist = await prisma.playlist.upsert({
@@ -156,31 +163,39 @@ export async function assignToday(screenIds: string[], screenGroupIds: string[],
       update: {},
     });
     await prisma.$transaction(async (tx) => {
+      // Remove any previously-assigned birthday items, keep everything else,
+      // then re-pack positions and append today's birthday posts at the end.
       const live = await tx.playlistItem.findMany({
         where: { playlistId: playlist.id, stage: 'LIVE' },
+        include: { content: { select: { type: true } } },
         orderBy: { position: 'asc' },
       });
-      let pos = live.length;
-      for (const c of birthdayContents) {
-        const already = live.some((l) => l.contentId === c.id);
-        if (already) continue;
+      const kept = live.filter((l) => l.content.type !== CONTENT_TYPE.BIRTHDAY);
+
+      await tx.playlistItem.deleteMany({ where: { playlistId: playlist.id, stage: 'LIVE' } });
+      let pos = 0;
+      for (const item of kept) {
         await tx.playlistItem.create({
-          data: {
-            playlistId: playlist.id,
-            stage: 'LIVE',
-            position: pos++,
-            durationSec: c.defaultDurationSec,
-            contentId: c.id,
-          },
+          data: { playlistId: playlist.id, stage: 'LIVE', position: pos++, durationSec: item.durationSec, contentId: item.contentId },
         });
       }
-      await tx.content.updateMany({
-        where: { id: { in: birthdayContents.map((c) => c.id) } },
-        data: { status: CONTENT_STATUS.LIVE },
+      for (const c of birthdayContents) {
+        await tx.playlistItem.create({
+          data: { playlistId: playlist.id, stage: 'LIVE', position: pos++, durationSec: c.defaultDurationSec, contentId: c.id },
+        });
+      }
+      if (birthdayIds.length > 0) {
+        await tx.content.updateMany({ where: { id: { in: birthdayIds } }, data: { status: CONTENT_STATUS.LIVE } });
+      }
+      // Reset the draft so the handler's editor reflects the new live set.
+      await tx.playlistItem.deleteMany({ where: { playlistId: playlist.id, stage: 'DRAFT' } });
+      await tx.playlist.update({
+        where: { id: playlist.id },
+        data: { liveVersion: { increment: 1 }, livePublishedAt: new Date(), draftInitialized: false },
       });
-      await tx.playlist.update({ where: { id: playlist.id }, data: { liveVersion: { increment: 1 }, livePublishedAt: new Date() } });
     });
     wsHub.broadcastToScreen(screenId, { event: WS.PLAYLIST_UPDATED, data: { screenId } });
+    wsHub.broadcastToDashboard({ event: WS.PLAYLIST_UPDATED, data: { screenId } });
   }
   return { assigned: birthdayContents.length, screens: targetScreenIds.length };
 }

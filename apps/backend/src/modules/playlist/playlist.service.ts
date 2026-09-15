@@ -398,3 +398,30 @@ export async function publishToScreens(
   }
   return { results, skipped };
 }
+
+/**
+ * Publish a fixed set of content as the LIVE playlist for the given screens,
+ * REPLACING whatever they were showing. Durations default to each content's own.
+ * Returns per-screen new versions; the caller broadcasts.
+ */
+export async function publishItemsToScreens(
+  screenIds: string[],
+  rawItems: { contentId: string; durationSec?: number }[],
+): Promise<{ screenId: string; version: number }[]> {
+  const contents = await prisma.content.findMany({
+    where: { id: { in: rawItems.map((i) => i.contentId) } },
+    select: { id: true, defaultDurationSec: true },
+  });
+  const durMap = new Map(contents.map((c) => [c.id, c.defaultDurationSec]));
+  const items = rawItems
+    .filter((i) => durMap.has(i.contentId)) // ignore unknown content ids
+    .map((i) => ({ contentId: i.contentId, durationSec: i.durationSec ?? durMap.get(i.contentId) ?? 15 }));
+
+  const results: { screenId: string; version: number }[] = [];
+  for (const screenId of screenIds) {
+    await setDraftFromItems(screenId, items);
+    const { version } = await publish(screenId);
+    results.push({ screenId, version });
+  }
+  return results;
+}

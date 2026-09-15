@@ -67,6 +67,17 @@ export const screenGroupSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(300).optional(),
 });
+/** Publish a set of content as the playlist for EVERY screen in a group (replaces live). */
+export const groupPublishSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        contentId: z.string().uuid(),
+        durationSec: z.number().int().min(1).max(3600).optional(),
+      }),
+    )
+    .min(1),
+});
 
 // ── Content ──
 // Upload metadata (file itself comes via multipart)
@@ -124,6 +135,9 @@ export const studentSchema = z.object({
   course: z.string().max(120).optional(),
 });
 export const updateStudentSchema = studentSchema.partial();
+export const bulkStudentsSchema = z.object({
+  students: z.array(studentSchema).min(1).max(5000),
+});
 
 // ── Birthday template ──
 export const birthdayTemplateSchema = z.object({
