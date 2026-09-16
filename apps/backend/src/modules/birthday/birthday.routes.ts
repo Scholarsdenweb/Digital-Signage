@@ -45,7 +45,7 @@ birthdayRouter.post(
     const tpl = await prisma.birthdayTemplate.findUnique({ where: { id: req.params.id } });
     if (!tpl) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Template not found' } });
     const mediaObjectId = await storeUploadedMedia(req.file as never);
-    const design = { ...((tpl.design ?? {}) as Record<string, unknown>), backgroundMediaObjectId: mediaObjectId };
+    const design = { ...((tpl.design ?? {}) as Record<string, unknown>), style: 'neon', backgroundMediaObjectId: mediaObjectId };
     const updated = await prisma.birthdayTemplate.update({ where: { id: tpl.id }, data: { design } });
     await logActivity({ actorId: req.auth!.userId, action: 'BIRTHDAY_TEMPLATE_BACKGROUND', entityType: 'BirthdayTemplate', entityId: tpl.id });
     res.json(await withBackgroundUrl(updated));

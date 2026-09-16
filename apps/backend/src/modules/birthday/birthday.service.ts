@@ -158,8 +158,10 @@ async function defaultTemplate() {
       data: { name: 'Default', isDefault: true, defaultDurationSec: 10, design: NEON_DESIGN },
     });
   } else if ((tpl.design as Record<string, unknown> | null)?.style !== 'neon') {
-    // Upgrade an older plain template to the neon design.
-    tpl = await prisma.birthdayTemplate.update({ where: { id: tpl.id }, data: { design: NEON_DESIGN } });
+    // Upgrade an older plain template to the neon palette WITHOUT losing custom fields
+    // like an uploaded backgroundMediaObjectId.
+    const merged = { ...((tpl.design ?? {}) as Record<string, unknown>), ...NEON_DESIGN };
+    tpl = await prisma.birthdayTemplate.update({ where: { id: tpl.id }, data: { design: merged } });
   }
   return tpl;
 }
