@@ -231,8 +231,8 @@ const SPARKLE_B: React.CSSProperties = { position: 'absolute', top: '48%', left:
 
 const CONTENT: React.CSSProperties = { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' };
 const DATE: React.CSSProperties = {
-  position: 'absolute', top: '10%', color: '#22d3ee', fontWeight: 900, letterSpacing: '0.56em',
-  fontSize: 'min(5vh, 4.6vw)', textShadow: '0 0 18px rgba(34,211,238,.75),0 0 40px rgba(34,211,238,.4),0 2px 10px rgba(0,0,0,.65)', animation: 'bd-down 1s ease-out both',
+  position: 'absolute', top: '10%', color: '#ffdd00', fontWeight: 600, letterSpacing: '0.56em',
+  fontSize: 'min(5vh, 4.6vw)', textShadow: '0 0 18px rgba(255,221,0,.7),0 0 40px rgba(255,221,0,.35),0 2px 10px rgba(0,0,0,.65)', animation: 'bd-down 1s ease-out both',
   paddingLeft: '0.5em',
 };
 const TITLE_GROUP: React.CSSProperties = { animation: 'bd-float 6s ease-in-out infinite', marginTop: '-5vh' };

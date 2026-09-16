@@ -149,7 +149,7 @@ async function renderBirthdayImage(
       <rect width="100%" height="100%" fill="none" stroke="rgba(0,0,0,0)" />
 
       <text x="50%" y="${height * 0.13}" text-anchor="middle" font-family="${SANS}" letter-spacing="16"
-        font-size="${Math.round(height * 0.052)}" fill="#22d3ee" font-weight="900" filter="url(#glow)">${escapeXml(dateLine)}</text>
+        font-size="${Math.round(height * 0.052)}" fill="#ffdd00" font-weight="600" filter="url(#glow)">${escapeXml(dateLine)}</text>
 
       <text x="50%" y="${height * 0.495}" text-anchor="middle" font-family="${SANS}" letter-spacing="6"
         font-size="${Math.round(height * 0.32)}" fill="#ffffff" font-weight="900" filter="url(#whiteGlow)">HAPPY</text>
