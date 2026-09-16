@@ -155,7 +155,6 @@ export function BirthdaySlide({
           <div style={SCRIPT}>Birthday</div>
         </div>
         <div style={NAME_WRAP}>
-          <div style={DIVIDER} />
           <div style={NAME}>{name}</div>
           {batch && <div style={BATCH}>{batch}</div>}
         </div>
@@ -211,7 +210,6 @@ const SCRIPT: React.CSSProperties = {
   animation: 'bd-in 1.1s cubic-bezier(.2,.8,.2,1) .15s both, bd-glow 2.8s ease-in-out 1s infinite',
 };
 const NAME_WRAP: React.CSSProperties = { position: 'absolute', top: '76%', left: 0, right: 0, animation: 'bd-in 1.1s cubic-bezier(.2,.8,.2,1) .3s both' };
-const DIVIDER: React.CSSProperties = { width: 'min(22vw, 240px)', height: 3, margin: '0 auto 1.6vh', borderRadius: 3, background: 'linear-gradient(90deg,transparent,#d946ef,transparent)', boxShadow: '0 0 12px #d946ef' };
 const NAME: React.CSSProperties = {
   color: '#fff', fontWeight: 800, letterSpacing: '0.06em', fontSize: 'min(6.6vh, 8vw)', lineHeight: 1.05,
   padding: '0 6vw', animation: 'bd-white 2.8s ease-in-out infinite',
