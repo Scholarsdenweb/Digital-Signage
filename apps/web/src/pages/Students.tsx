@@ -49,6 +49,22 @@ export function Students() {
     load();
   }, []);
 
+  function downloadSample() {
+    const csv =
+      'studentCode,name,dateOfBirth,batch,course\n' +
+      'STU-101,Rahul Sharma,2008-09-15,NEET 2026,Biology\n' +
+      'STU-102,Aman Verma,2007-09-15,JEE 2026,Physics\n' +
+      'STU-103,Priya Singh,2008-01-15,NEET 2026,Chemistry\n';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'students-sample.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function onCsv(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -101,6 +117,7 @@ export function Students() {
         <h1 style={{ margin: 0 }}>Students</h1>
         <div className="row">
           <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onCsv} style={{ display: 'none' }} />
+          <button className="ghost" onClick={downloadSample}>⬇ Sample CSV</button>
           <button className="ghost" disabled={importing} onClick={() => fileRef.current?.click()}>
             {importing ? 'Importing…' : '⬆ Import CSV'}
           </button>
@@ -108,7 +125,8 @@ export function Students() {
         </div>
       </div>
       <p className="muted" style={{ marginTop: -8 }}>
-        CSV columns: <b>studentCode, name, dateOfBirth</b> (YYYY-MM-DD), optional <b>batch, course</b>. Existing codes are updated.
+        CSV columns: <b>studentCode, name, dateOfBirth</b> (YYYY-MM-DD), optional <b>batch, course</b>. Existing codes are
+        updated. Download the <b>Sample CSV</b> to see the exact format.
       </p>
       {!items ? (
         <Spinner />
