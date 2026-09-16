@@ -1,8 +1,8 @@
 /* Service worker: offline app shell + media cache.
    Media is cached on first fetch (cache-first) so the player keeps looping when
    the network drops. The app shell is cached so the player boots offline. */
-const SHELL_CACHE = 'dsm-shell-v1';
-const MEDIA_CACHE = 'dsm-media-v1';
+const SHELL_CACHE = 'dsm-shell-v2';
+const MEDIA_CACHE = 'dsm-media-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
