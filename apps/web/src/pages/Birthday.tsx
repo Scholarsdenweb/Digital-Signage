@@ -22,6 +22,8 @@ export function Birthday() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [screens, setScreens] = useState<ScreenRow[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [regenerating, setRegenerating] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
   const load = () => {
     api.get<Instance[]>('/birthday/today').then(setToday).catch(() => setToday([]));
@@ -33,21 +35,37 @@ export function Birthday() {
   }, []);
 
   async function generate() {
+    if (regenerating) return;
+    setRegenerating(true);
+    toast.push('Regenerating birthday posts…', 'info');
     try {
       const r = await api.post<{ count: number }>('/birthday/generate');
-      toast.push(`Generated ${r.count} birthday item(s)`, 'success');
+      toast.push(`Regenerated ${r.count} birthday post(s)`, 'success');
       load();
     } catch (e: any) {
       toast.push(e.message, 'error');
+    } finally {
+      setRegenerating(false);
     }
   }
 
   async function assign() {
+    if (assigning) return;
+    if (selected.length === 0) {
+      toast.push('Select at least one screen first', 'error');
+      return;
+    }
+    setAssigning(true);
     try {
-      await api.post('/birthday/assign', { screenIds: selected, screenGroupIds: [] });
-      toast.push('Birthday content assigned & pushed live', 'success');
+      const r = await api.post<{ assigned: number; screens: number }>('/birthday/assign', {
+        screenIds: selected,
+        screenGroupIds: [],
+      });
+      toast.push(`Assigned to ${r.screens} screen(s) — pushed live`, 'success');
     } catch (e: any) {
       toast.push(e.message, 'error');
+    } finally {
+      setAssigning(false);
     }
   }
 
@@ -62,7 +80,9 @@ export function Birthday() {
       <div className="card">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <h3 style={{ margin: 0 }}>Today's Birthdays</h3>
-          <button className="ghost" onClick={generate}>Regenerate now</button>
+          <button className="primary" onClick={generate} disabled={regenerating}>
+            {regenerating ? 'Regenerating…' : 'Regenerate now'}
+          </button>
         </div>
         {!today ? (
           <Spinner />
@@ -97,8 +117,8 @@ export function Birthday() {
           ))}
         </div>
         <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
-          <button className="primary" disabled={selected.length === 0} onClick={assign}>
-            Assign today's birthdays
+          <button className="primary" disabled={selected.length === 0 || assigning} onClick={assign}>
+            {assigning ? 'Assigning…' : "Assign today's birthdays"}
           </button>
         </div>
       </div>
