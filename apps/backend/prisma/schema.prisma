@@ -212,6 +212,9 @@ model Content {
   owner              User          @relation(fields: [ownerId], references: [id])
   mediaObjectId      String
   media              MediaObject   @relation(fields: [mediaObjectId], references: [id])
+  // For animated overlay content (e.g. birthday): dynamic text drawn over the media
+  // by the player. { name, dateText, batch } — null for normal content.
+  overlay            Json?
   // birthday-generated content links back to the instance
   birthdayInstanceId String?       @unique
   birthdayInstance   BirthdayInstance? @relation(fields: [birthdayInstanceId], references: [id])

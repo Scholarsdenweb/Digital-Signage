@@ -192,6 +192,13 @@ export async function generateForDate(forDate = todayUtcDate(), force = false) {
   const tpl = await defaultTemplate();
   const design = tpl.design as Record<string, unknown>;
 
+  // If the template has an uploaded background image, the player renders an animated
+  // slide (exact background + animated name/date overlay). Otherwise fall back to a
+  // generated image with the name baked in.
+  const backgroundMediaId =
+    typeof design.backgroundMediaObjectId === 'string' ? design.backgroundMediaObjectId : null;
+  const bgExists = backgroundMediaId ? await prisma.mediaObject.findUnique({ where: { id: backgroundMediaId } }) : null;
+
   const results = [];
   for (const student of students) {
     const existing = await prisma.birthdayInstance.findFirst({
@@ -202,7 +209,14 @@ export async function generateForDate(forDate = todayUtcDate(), force = false) {
       results.push(existing);
       continue;
     }
-    const mediaObjectId = await renderBirthdayImage(student, design);
+    const dob = student.dateOfBirth;
+    const dateText = `${dob.getUTCDate()}${ordinal(dob.getUTCDate())} ${MONTHS[dob.getUTCMonth()]}`;
+
+    const mediaObjectId = bgExists ? bgExists.id : await renderBirthdayImage(student, design);
+    const overlay = bgExists
+      ? { name: student.name.toUpperCase(), dateText, batch: student.batch ?? undefined }
+      : undefined;
+
     const instance = await prisma.birthdayInstance.create({
       data: { studentId: student.id, templateId: tpl.id, forDate },
     });
@@ -212,8 +226,9 @@ export async function generateForDate(forDate = todayUtcDate(), force = false) {
         type: CONTENT_TYPE.BIRTHDAY,
         status: CONTENT_STATUS.DRAFT,
         defaultDurationSec: tpl.defaultDurationSec,
-        ownerId: (await systemOwnerId()),
+        ownerId: await systemOwnerId(),
         mediaObjectId,
+        overlay: overlay as never,
         birthdayInstanceId: instance.id,
       },
     });

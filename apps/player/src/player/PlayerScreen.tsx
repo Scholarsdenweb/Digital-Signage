@@ -6,6 +6,7 @@ import { DeviceSocket } from '../net/socket.js';
 import { precacheMedia, cacheStats } from '../storage/mediaCache.js';
 import { config } from '../config.js';
 import { startFreezeWatchdog } from '../kiosk/kiosk.js';
+import { BirthdaySlide } from './BirthdaySlide.js';
 
 export function PlayerScreen({ onDisabled }: { onDisabled: () => void }) {
   const token = deviceStore.getToken()!;
@@ -173,6 +174,22 @@ export function PlayerScreen({ onDisabled }: { onDisabled: () => void }) {
   // Per-content fit: CONTAIN shows the whole media (no cropping), COVER fills the
   // screen edge-to-edge (may crop). Chosen by the uploader.
   const fit: React.CSSProperties['objectFit'] = current.content.fitMode === 'CONTAIN' ? 'contain' : 'cover';
+
+  // Birthday with an uploaded background → animated overlay slide (name/date/confetti).
+  if (current.content.type === 'BIRTHDAY' && current.content.birthday) {
+    const b = current.content.birthday;
+    return (
+      <BirthdaySlide
+        key={current.id}
+        bg={media.url}
+        name={b.name}
+        dateText={b.dateText}
+        batch={b.batch}
+        fit={fit === 'contain' ? 'contain' : 'cover'}
+      />
+    );
+  }
+
   const mediaStyle: React.CSSProperties = { ...MEDIA, objectFit: fit };
   // When the backend is on a different origin (e.g. player on Netlify, API on a VPS),
   // request media with CORS so the service worker can cache it for offline playback.

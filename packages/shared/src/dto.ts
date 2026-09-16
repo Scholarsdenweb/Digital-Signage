@@ -187,6 +187,8 @@ export interface ContentDto {
   ownerId: string;
   ownerName?: string;
   media: MediaInfo;
+  /** Animated text the player overlays on the media (e.g. birthday name/date). */
+  birthday?: { name: string; dateText: string; batch?: string };
   createdAt: string;
   updatedAt: string;
 }

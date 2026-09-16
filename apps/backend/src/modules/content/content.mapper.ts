@@ -10,6 +10,7 @@ type ContentWithRelations = {
   defaultDurationSec: number;
   ownerId: string;
   owner?: { name: string } | null;
+  overlay?: unknown;
   media: {
     id: string;
     kind: string;
@@ -43,6 +44,7 @@ export async function toContentDto(c: ContentWithRelations): Promise<ContentDto>
       sizeBytes: c.media.sizeBytes,
       url: await storage().resolveUrl(c.media.storageKey, c.id),
     },
+    birthday: (c.overlay as ContentDto['birthday']) ?? undefined,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
