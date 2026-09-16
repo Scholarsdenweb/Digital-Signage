@@ -194,13 +194,6 @@ export async function generateForDate(forDate = todayUtcDate(), force = false) {
   const tpl = await defaultTemplate();
   const design = tpl.design as Record<string, unknown>;
 
-  // If the template has an uploaded background image, the player renders an animated
-  // slide (exact background + animated name/date overlay). Otherwise fall back to a
-  // generated image with the name baked in.
-  const backgroundMediaId =
-    typeof design.backgroundMediaObjectId === 'string' ? design.backgroundMediaObjectId : null;
-  const bgExists = backgroundMediaId ? await prisma.mediaObject.findUnique({ where: { id: backgroundMediaId } }) : null;
-
   const results = [];
   for (const student of students) {
     const existing = await prisma.birthdayInstance.findFirst({
@@ -214,10 +207,10 @@ export async function generateForDate(forDate = todayUtcDate(), force = false) {
     const dob = student.dateOfBirth;
     const dateText = `${dob.getUTCDate()}${ordinal(dob.getUTCDate())} ${MONTHS[dob.getUTCMonth()]}`;
 
-    const mediaObjectId = bgExists ? bgExists.id : await renderBirthdayImage(student, design);
-    const overlay = bgExists
-      ? { name: student.name.toUpperCase(), dateText, batch: student.batch ?? undefined }
-      : undefined;
+    // The player renders the permanent animated design from these overlay details.
+    // The generated poster is kept as the media (admin thumbnail + offline fallback).
+    const mediaObjectId = await renderBirthdayImage(student, design);
+    const overlay = { name: student.name.toUpperCase(), dateText, batch: student.batch ?? undefined };
 
     const instance = await prisma.birthdayInstance.create({
       data: { studentId: student.id, templateId: tpl.id, forDate },

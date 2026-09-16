@@ -3,53 +3,18 @@ import { birthdayTemplateSchema, assignBirthdaySchema, PERMISSIONS } from '@dsm/
 import { requireAuth } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
 import { validateBody } from '../../middleware/validate.js';
-import { upload } from '../../middleware/upload.js';
-import { uploadLimiter } from '../../middleware/rateLimit.js';
 import { asyncHandler } from '../../middleware/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
-import { storage } from '../../storage/index.js';
-import { storeUploadedMedia } from '../media/media.service.js';
 import * as birthday from './birthday.service.js';
 import { logActivity } from '../activity/activity.service.js';
 
 export const birthdayRouter = Router();
 birthdayRouter.use(requireAuth);
 
-// Resolve each template's background image URL (if it has one uploaded).
-async function withBackgroundUrl(t: { design: unknown }) {
-  const design = (t.design ?? {}) as Record<string, unknown>;
-  let backgroundUrl: string | null = null;
-  if (typeof design.backgroundMediaObjectId === 'string') {
-    const m = await prisma.mediaObject.findUnique({ where: { id: design.backgroundMediaObjectId } });
-    if (m) backgroundUrl = await storage().resolveUrl(m.storageKey, `bg-${m.id}`);
-  }
-  return { ...t, backgroundUrl };
-}
-
 // Templates
 birthdayRouter.get(
   '/templates',
-  asyncHandler(async (_req, res) => {
-    const tpls = await prisma.birthdayTemplate.findMany();
-    res.json(await Promise.all(tpls.map(withBackgroundUrl)));
-  }),
-);
-
-// Upload the exact birthday background image for a template (player overlays name/date).
-birthdayRouter.post(
-  '/templates/:id/background',
-  requirePermission(PERMISSIONS.MANAGE_BIRTHDAY_TEMPLATES),
-  uploadLimiter,
-  upload.single('file'),
-  asyncHandler(async (req, res) => {
-    const tpl = await prisma.birthdayTemplate.findUnique({ where: { id: req.params.id } });
-    if (!tpl) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Template not found' } });
-    const mediaObjectId = await storeUploadedMedia(req.file as never);
-    const design = { ...((tpl.design ?? {}) as Record<string, unknown>), style: 'neon', backgroundMediaObjectId: mediaObjectId };
-    const updated = await prisma.birthdayTemplate.update({ where: { id: tpl.id }, data: { design } });
-    await logActivity({ actorId: req.auth!.userId, action: 'BIRTHDAY_TEMPLATE_BACKGROUND', entityType: 'BirthdayTemplate', entityId: tpl.id });
-    res.json(await withBackgroundUrl(updated));
-  }),
+  asyncHandler(async (_req, res) => res.json(await prisma.birthdayTemplate.findMany())),
 );
 birthdayRouter.post(
   '/templates',

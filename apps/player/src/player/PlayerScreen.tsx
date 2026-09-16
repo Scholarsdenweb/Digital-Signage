@@ -175,19 +175,10 @@ export function PlayerScreen({ onDisabled }: { onDisabled: () => void }) {
   // screen edge-to-edge (may crop). Chosen by the uploader.
   const fit: React.CSSProperties['objectFit'] = current.content.fitMode === 'CONTAIN' ? 'contain' : 'cover';
 
-  // Birthday with an uploaded background → animated overlay slide (name/date/confetti).
+  // Birthday → permanent animated design, personalized with the student's details.
   if (current.content.type === 'BIRTHDAY' && current.content.birthday) {
     const b = current.content.birthday;
-    return (
-      <BirthdaySlide
-        key={current.id}
-        bg={media.url}
-        name={b.name}
-        dateText={b.dateText}
-        batch={b.batch}
-        fit={fit === 'contain' ? 'contain' : 'cover'}
-      />
-    );
+    return <BirthdaySlide key={current.id} name={b.name} dateText={b.dateText} batch={b.batch} />;
   }
 
   const mediaStyle: React.CSSProperties = { ...MEDIA, objectFit: fit };

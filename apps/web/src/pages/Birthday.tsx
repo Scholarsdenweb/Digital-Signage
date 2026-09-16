@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import { useToast } from '../store/toast.js';
 import { Empty, Spinner } from '../components/ui.js';
@@ -14,7 +14,6 @@ interface Template {
   name: string;
   isDefault: boolean;
   defaultDurationSec: number;
-  backgroundUrl?: string | null;
 }
 
 export function Birthday() {
@@ -23,30 +22,6 @@ export function Birthday() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [screens, setScreens] = useState<ScreenRow[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const bgFileRef = useRef<HTMLInputElement>(null);
-  const bgTargetRef = useRef<string | null>(null);
-
-  function pickBackground(templateId: string) {
-    bgTargetRef.current = templateId;
-    bgFileRef.current?.click();
-  }
-
-  async function onBackground(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    const id = bgTargetRef.current;
-    if (!file || !id) return;
-    const form = new FormData();
-    form.append('file', file);
-    try {
-      await api.upload(`/birthday/templates/${id}/background`, form);
-      toast.push('Background uploaded — click “Regenerate now” to apply', 'success');
-      load();
-    } catch (err: any) {
-      toast.push(err.message, 'error');
-    } finally {
-      if (bgFileRef.current) bgFileRef.current.value = '';
-    }
-  }
 
   const load = () => {
     api.get<Instance[]>('/birthday/today').then(setToday).catch(() => setToday([]));
@@ -80,8 +55,8 @@ export function Birthday() {
     <div className="grid">
       <h1 style={{ margin: 0 }}>Birthday</h1>
       <p className="muted" style={{ marginTop: -8 }}>
-        Birthday posts are generated automatically each day from students' dates of birth. Optionally upload your own
-        background design (below) and the player animates the student's name & date over it.
+        Birthday posts are generated automatically each day from students' dates of birth, using a built-in animated
+        design that fills in each student's name and date.
       </p>
 
       <div className="card">
@@ -131,35 +106,19 @@ export function Birthday() {
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Templates</h3>
         <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
-          Upload your exact birthday background (design without the name — the player overlays the student's name & date
-          with animation on top). If no background is set, a generated neon poster is used instead.
+          A permanent animated design is built in — each birthday post automatically shows the student's name, date and
+          batch with glowing text and confetti. Nothing to upload.
         </p>
-        <input ref={bgFileRef} type="file" accept="image/*" onChange={onBackground} style={{ display: 'none' }} />
         {templates.length === 0 ? (
           <Empty text="No templates." />
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 12 }}>
+          <ul>
             {templates.map((t) => (
-              <div key={t.id} className="card" style={{ padding: 10 }}>
-                {t.backgroundUrl ? (
-                  <img src={t.backgroundUrl} alt="" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, background: '#000' }} />
-                ) : (
-                  <div style={{ height: 120, borderRadius: 8, background: '#0b1220', display: 'grid', placeItems: 'center', color: 'var(--muted)', fontSize: 12 }}>
-                    No background (generated poster)
-                  </div>
-                )}
-                <div style={{ fontWeight: 600, marginTop: 8 }}>
-                  {t.name} {t.isDefault && <span className="muted">(default)</span>}
-                </div>
-                <div className="muted" style={{ fontSize: 12 }}>{t.defaultDurationSec}s each</div>
-                <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
-                  <button className="primary" onClick={() => pickBackground(t.id)}>
-                    {t.backgroundUrl ? 'Change background' : 'Upload background'}
-                  </button>
-                </div>
-              </div>
+              <li key={t.id}>
+                {t.name} {t.isDefault && <span className="muted">(default)</span>} · {t.defaultDurationSec}s
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
     </div>
