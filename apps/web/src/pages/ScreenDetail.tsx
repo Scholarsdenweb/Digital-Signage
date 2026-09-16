@@ -14,6 +14,7 @@ import { api } from '../api/client.js';
 import { useToast } from '../store/toast.js';
 import { useAuth } from '../store/auth.js';
 import { Modal, StatusBadge, Empty, Spinner } from '../components/ui.js';
+import { BirthdaySlide } from '../components/BirthdaySlide.js';
 import { PERMISSIONS } from '@dsm/shared';
 import type { PlaylistDto, PlaylistItemDto, ContentDto } from '@dsm/shared';
 import type { ScreenRow } from './Screens.js';
@@ -681,7 +682,12 @@ function PreviewModal({ screen, items, onClose }: { screen: ScreenRow; items: Pl
         <div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
           <div style={{ width: boxW, height: boxH, background: '#000', overflow: 'hidden', borderRadius: 8 }}>
             {(() => {
-              // Match the player exactly: honor the content's chosen fit mode.
+              // Birthday → render the same animated design the screen shows.
+              if (item.content.type === 'BIRTHDAY' && item.content.birthday) {
+                const b = item.content.birthday;
+                return <BirthdaySlide name={b.name} dateText={b.dateText} batch={b.batch} />;
+              }
+              // Otherwise honor the content's chosen fit mode.
               const fit = item.content.fitMode === 'CONTAIN' ? 'contain' : 'cover';
               const st: React.CSSProperties = { width: '100%', height: '100%', objectFit: fit };
               return item.content.media.kind === 'VIDEO' ? (
