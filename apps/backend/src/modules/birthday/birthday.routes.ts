@@ -55,7 +55,8 @@ birthdayRouter.post(
   '/generate',
   requirePermission(PERMISSIONS.MANAGE_BIRTHDAY_TEMPLATES),
   asyncHandler(async (req, res) => {
-    const instances = await birthday.generateForDate();
+    // Manual trigger forces a fresh re-render (picks up template/design changes).
+    const instances = await birthday.generateForDate(undefined, true);
     await logActivity({ actorId: req.auth!.userId, action: 'BIRTHDAY_GENERATE', metadata: { count: instances.length } });
     res.json({ ok: true, count: instances.length });
   }),

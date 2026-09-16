@@ -16,8 +16,16 @@ RUN npm run build -w @dsm/shared \
 FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-# Prisma migrate/query engines need OpenSSL at runtime too.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+# OpenSSL for Prisma; fonts for the birthday image renderer (sharp/librsvg needs
+# real fonts installed). Pacifico gives the cursive "Birthday" look.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates fontconfig fonts-dejavu-core fonts-liberation curl \
+ && mkdir -p /usr/share/fonts/truetype/pacifico \
+ && (curl -fsSL -o /usr/share/fonts/truetype/pacifico/Pacifico-Regular.ttf \
+      https://github.com/google/fonts/raw/main/ofl/pacifico/Pacifico-Regular.ttf || echo "pacifico download skipped") \
+ && fc-cache -f \
+ && apt-get purge -y curl && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/*
 # sharp needs libvips runtime libs (bundled in prebuilt binary on slim works)
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
