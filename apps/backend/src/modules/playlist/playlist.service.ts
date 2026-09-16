@@ -32,6 +32,8 @@ async function ensureDraft(tx: Tx, playlistId: string) {
       orderBy: { position: 'asc' },
     });
     if (live.length > 0) {
+      // skipDuplicates guards against a concurrent ensureDraft (e.g. the editor
+      // page double-loading) trying to seed the same positions at once.
       await tx.playlistItem.createMany({
         data: live.map((i) => ({
           playlistId,
@@ -40,6 +42,7 @@ async function ensureDraft(tx: Tx, playlistId: string) {
           durationSec: i.durationSec,
           contentId: i.contentId,
         })),
+        skipDuplicates: true,
       });
     }
   }
