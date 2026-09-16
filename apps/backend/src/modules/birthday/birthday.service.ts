@@ -36,27 +36,28 @@ function makeRng(seed: number) {
   };
 }
 
-/** Renders a neon "Happy Birthday" image for a student, returns mediaObjectId. */
+/** Renders a stage-neon "Happy Birthday" image for a student, returns mediaObjectId. */
 async function renderBirthdayImage(
   student: { name: string; dateOfBirth: Date; batch?: string | null; course?: string | null },
   design: Record<string, unknown>,
 ): Promise<string> {
   const width = Number(design.width ?? 1920);
   const height = Number(design.height ?? 1080);
-  const accent = String(design.accent ?? '#c026d3'); // magenta/purple neon
+  const accent = String(design.accent ?? '#d946ef'); // magenta/purple neon
   const dob = student.dateOfBirth;
   const dateLine = `${dob.getUTCDate()}${ordinal(dob.getUTCDate())} ${MONTHS[dob.getUTCMonth()]}`;
   const nameLine = student.name.toUpperCase();
   const subLine = student.batch ? `(${student.batch})` : student.course ? `(${student.course})` : '';
   const rng = makeRng(dob.getUTCDate() * 131 + dob.getUTCMonth() * 977 + student.name.length * 17);
 
-  // ── Spotlight beams from the top ──
-  const beamColors = ['#a855f7', '#3b82f6', '#ec4899', '#f59e0b', '#22d3ee'];
+  // ── Concert-style spotlights from the top ──
+  const beamColors = ['#d946ef', '#0ea5e9', '#facc15', '#facc15', '#0ea5e9', '#d946ef'];
   const beams = beamColors
     .map((c, i) => {
-      const x = (width * (i + 0.5)) / beamColors.length + (rng() - 0.5) * 120;
+      const positions = [0.03, 0.14, 0.36, 0.59, 0.78, 0.97];
+      const x = width * positions[i] + (rng() - 0.5) * 48;
       const spread = width * 0.16;
-      return `<polygon points="${x - 14},0 ${x + 14},0 ${x + spread},${height * 0.92} ${x - spread},${height * 0.92}" fill="url(#beam${i})" opacity="0.32" filter="url(#soft)"/>
+      return `<polygon points="${x - 14},0 ${x + 14},0 ${x + spread},${height * 0.92} ${x - spread},${height * 0.92}" fill="url(#beam${i})" opacity="0.42" filter="url(#soft)"/>
         <defs><linearGradient id="beam${i}" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="${c}" stop-opacity="0.85"/><stop offset="1" stop-color="${c}" stop-opacity="0"/>
         </linearGradient></defs>`;
@@ -64,9 +65,9 @@ async function renderBirthdayImage(
     .join('');
 
   // ── Bokeh circles ──
-  const bokehColors = ['#a855f7', '#ec4899', '#3b82f6', '#22d3ee', '#f5d0fe'];
+  const bokehColors = ['#a855f7', '#ec4899', '#3b82f6', '#22d3ee', '#f5d0fe', '#facc15'];
   let bokeh = '';
-  for (let i = 0; i < 44; i++) {
+  for (let i = 0; i < 52; i++) {
     const cx = rng() * width;
     const cy = height * 0.45 + rng() * height * 0.55;
     const r = 6 + rng() * 34;
@@ -85,18 +86,38 @@ async function renderBirthdayImage(
     confetti += `<rect x="${x.toFixed(0)}" y="${y.toFixed(0)}" width="${w.toFixed(0)}" height="${h.toFixed(0)}" rx="1.5" fill="${confettiColors[Math.floor(rng() * confettiColors.length)]}" opacity="${(0.5 + rng() * 0.5).toFixed(2)}" transform="rotate(${rot} ${x.toFixed(0)} ${y.toFixed(0)})"/>`;
   }
 
-  // ── Neon swoosh ribbon around the title ──
-  const cy = height * 0.52;
-  const swoosh = `
-    <path d="M ${width * 0.04} ${cy} C ${width * 0.28} ${cy + height * 0.16}, ${width * 0.42} ${cy + height * 0.13}, ${width * 0.5} ${cy + height * 0.05}
-             C ${width * 0.58} ${cy + height * 0.13}, ${width * 0.72} ${cy + height * 0.16}, ${width * 0.96} ${cy}"
-          fill="none" stroke="${accent}" stroke-width="6" stroke-linecap="round" filter="url(#neon)" opacity="0.95"/>`;
+  // ── Neon side ribbons and star ornaments around the title ──
+  const ribbonPaths = [
+    `M ${width * 0.023} ${height * 0.542} C ${width * 0.083} ${height * 0.468}, ${width * 0.206} ${height * 0.463}, ${width * 0.375} ${height * 0.426}`,
+    `M ${width * 0.977} ${height * 0.542} C ${width * 0.917} ${height * 0.468}, ${width * 0.794} ${height * 0.463}, ${width * 0.625} ${height * 0.426}`,
+  ];
+  const ribbons = ribbonPaths
+    .map(
+      (d) => `
+        <path d="${d}" fill="none" stroke="${accent}" stroke-width="12" stroke-linecap="round" filter="url(#neon)" opacity="0.95"/>
+        <path d="${d}" fill="none" stroke="#fce7ff" stroke-width="3.5" stroke-linecap="round" opacity="0.92"/>`,
+    )
+    .join('');
+
+  const fourStar = (x: number, y: number, size: number, rotate = 0) => `
+    <g transform="translate(${x} ${y}) rotate(${rotate}) scale(${size / 56})" filter="url(#starGlow)">
+      <path d="M0 -26 C5 -10 10 -5 26 0 C10 5 5 10 0 26 C-5 10 -10 5 -26 0 C-10 -5 -5 -10 0 -26Z" fill="none" stroke="#fff" stroke-width="5"/>
+      <path d="M0 -18 C3 -7 7 -3 18 0 C7 3 3 7 0 18 C-3 7 -7 3 -18 0 C-7 -3 -3 -7 0 -18Z" fill="#fff" opacity="0.92"/>
+    </g>`;
+  const ornaments = [
+    fourStar(width * 0.078, height * 0.139, 56),
+    fourStar(width * 0.136, height * 0.208, 70, 18),
+    fourStar(width * 0.095, height * 0.237, 82, 45),
+    fourStar(width * 0.915, height * 0.204, 70, -18),
+    fourStar(width * 0.942, height * 0.139, 56),
+    fourStar(width * 0.936, height * 0.237, 82, -45),
+  ].join('');
 
   const svg = `
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="bg" cx="50%" cy="42%" r="75%">
-          <stop offset="0" stop-color="#2a0f4a"/><stop offset="55%" stop-color="#140a26"/><stop offset="100%" stop-color="#050109"/>
+        <radialGradient id="bg" cx="50%" cy="42%" r="70%">
+          <stop offset="0" stop-color="#321046"/><stop offset="48%" stop-color="#120519"/><stop offset="100%" stop-color="#020105"/>
         </radialGradient>
         <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter>
         <filter id="neon" x="-60%" y="-60%" width="220%" height="220%">
@@ -107,27 +128,39 @@ async function renderBirthdayImage(
           <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b"/>
           <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
+        <filter id="whiteGlow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="b"/>
+          <feFlood flood-color="#d946ef" flood-opacity="0.42" result="c"/>
+          <feComposite in="c" in2="b" operator="in" result="colored"/>
+          <feMerge><feMergeNode in="colored"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="starGlow" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
       </defs>
 
       <rect width="100%" height="100%" fill="url(#bg)"/>
       ${beams}
       ${bokeh}
+      ${ornaments}
+      ${ribbons}
       ${confetti}
-      ${swoosh}
+      <rect width="100%" height="100%" fill="none" stroke="rgba(0,0,0,0)" />
 
-      <text x="50%" y="${height * 0.13}" text-anchor="middle" font-family="${SANS}" letter-spacing="10"
-        font-size="${Math.round(height * 0.035)}" fill="#f5d0fe" font-weight="bold">${escapeXml(dateLine)}</text>
+      <text x="50%" y="${height * 0.13}" text-anchor="middle" font-family="${SANS}" letter-spacing="16"
+        font-size="${Math.round(height * 0.035)}" fill="#22d3ee" font-weight="900" filter="url(#glow)">${escapeXml(dateLine)}</text>
 
-      <text x="50%" y="${height * 0.4}" text-anchor="middle" font-family="${SANS}" letter-spacing="6"
-        font-size="${Math.round(height * 0.2)}" fill="#ffffff" font-weight="bold" filter="url(#glow)">HAPPY</text>
+      <text x="50%" y="${height * 0.495}" text-anchor="middle" font-family="${SANS}" letter-spacing="6"
+        font-size="${Math.round(height * 0.32)}" fill="#ffffff" font-weight="900" filter="url(#whiteGlow)">HAPPY</text>
 
-      <text x="50%" y="${height * 0.63}" text-anchor="middle" font-family="${SCRIPT}"
-        font-size="${Math.round(height * 0.17)}" fill="${accent}" filter="url(#neon)">Birthday</text>
+      <text x="50%" y="${height * 0.72}" text-anchor="middle" font-family="${SCRIPT}"
+        font-size="${Math.round(height * 0.19)}" fill="#ffffff" filter="url(#neon)">Birthday</text>
 
-      <text x="50%" y="${height * 0.84}" text-anchor="middle" font-family="${SANS}" letter-spacing="4"
-        font-size="${Math.round(height * 0.06)}" fill="#ffffff" font-weight="bold" filter="url(#glow)">${escapeXml(nameLine)}</text>
-      ${subLine ? `<text x="50%" y="${height * 0.92}" text-anchor="middle" font-family="${SANS}" letter-spacing="3"
-        font-size="${Math.round(height * 0.045)}" fill="#e9d5ff" font-weight="bold">${escapeXml(subLine)}</text>` : ''}
+      <text x="50%" y="${height * 0.865}" text-anchor="middle" font-family="${SANS}" letter-spacing="4"
+        font-size="${Math.round(height * 0.06)}" fill="#ffffff" font-weight="900" filter="url(#whiteGlow)">${escapeXml(nameLine)}</text>
+      ${subLine ? `<text x="50%" y="${height * 0.94}" text-anchor="middle" font-family="${SANS}" letter-spacing="3"
+        font-size="${Math.round(height * 0.045)}" fill="#ffffff" font-weight="900" filter="url(#glow)">${escapeXml(subLine)}</text>` : ''}
     </svg>`;
 
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
@@ -148,7 +181,7 @@ async function renderBirthdayImage(
   return media.id;
 }
 
-const NEON_DESIGN = { width: 1920, height: 1080, accent: '#c026d3', style: 'neon' };
+const NEON_DESIGN = { width: 1920, height: 1080, accent: '#d946ef', style: 'stage-neon-v2' };
 
 async function defaultTemplate() {
   let tpl = await prisma.birthdayTemplate.findFirst({ where: { isDefault: true } });
@@ -157,8 +190,8 @@ async function defaultTemplate() {
     tpl = await prisma.birthdayTemplate.create({
       data: { name: 'Default', isDefault: true, defaultDurationSec: 10, design: NEON_DESIGN },
     });
-  } else if ((tpl.design as Record<string, unknown> | null)?.style !== 'neon') {
-    // Upgrade an older plain template to the neon palette WITHOUT losing custom fields
+  } else if ((tpl.design as Record<string, unknown> | null)?.style !== NEON_DESIGN.style) {
+    // Upgrade an older plain template to the neon stage palette WITHOUT losing custom fields
     // like an uploaded backgroundMediaObjectId.
     const merged = { ...((tpl.design ?? {}) as Record<string, unknown>), ...NEON_DESIGN };
     tpl = await prisma.birthdayTemplate.update({ where: { id: tpl.id }, data: { design: merged } });

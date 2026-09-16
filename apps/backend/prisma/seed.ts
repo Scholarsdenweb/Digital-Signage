@@ -38,7 +38,7 @@ async function main() {
         name: 'Default',
         isDefault: true,
         defaultDurationSec: 10,
-        design: { width: 1920, height: 1080, background: '#0f172a', accent: '#f59e0b', message: 'Happy Birthday!' },
+        design: { width: 1920, height: 1080, accent: '#d946ef', style: 'stage-neon-v2', message: 'Happy Birthday!' },
       },
     });
   }
