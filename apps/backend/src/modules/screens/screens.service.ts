@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { NotFound, Conflict, Gone, BadRequest } from '../../lib/errors.js';
 import {
@@ -58,9 +59,21 @@ export async function pairingStatus(pairingCode: string) {
 
 // ── Admin: claim a pairing code -> create Screen + DeviceCredential ──
 
-async function nextScreenKey(): Promise<string> {
-  const count = await prisma.screen.count();
-  return `SCREEN-${String(count + 1).padStart(3, '0')}`;
+/**
+ * Next screen key = highest existing SCREEN-NNN + 1. Uses the max number rather than
+ * the row count, so deleting a screen never causes a duplicate key.
+ */
+async function nextScreenKey(tx: Prisma.TransactionClient): Promise<string> {
+  const screens = await tx.screen.findMany({
+    where: { screenKey: { startsWith: 'SCREEN-' } },
+    select: { screenKey: true },
+  });
+  let max = 0;
+  for (const s of screens) {
+    const n = parseInt(s.screenKey.slice('SCREEN-'.length), 10);
+    if (!Number.isNaN(n)) max = Math.max(max, n);
+  }
+  return `SCREEN-${String(max + 1).padStart(3, '0')}`;
 }
 
 export async function claimPairing(input: ClaimPairingInput) {
@@ -70,41 +83,52 @@ export async function claimPairing(input: ClaimPairingInput) {
   if (req.expiresAt < new Date()) throw Gone('Pairing code expired');
 
   const deviceToken = generateDeviceToken();
-  const screenKey = await nextScreenKey();
 
-  const screen = await prisma.$transaction(async (tx) => {
-    const screen = await tx.screen.create({
-      data: {
-        screenKey,
-        name: input.name,
-        location: input.location,
-        orientation: input.orientation,
-        width: req.width,
-        height: req.height,
-        devicePixelRatio: req.devicePixelRatio,
-        status: SCREEN_STATUS.ACTIVE,
-        screenGroupId: input.screenGroupId,
-      },
-    });
-    await tx.deviceCredential.create({
-      data: { screenId: screen.id, tokenHash: hashDeviceToken(deviceToken) },
-    });
-    await tx.playlist.create({ data: { screenId: screen.id } });
-    if (input.handlerIds.length > 0) {
-      await tx.screenHandler.createMany({
-        data: input.handlerIds.map((userId) => ({ screenId: screen.id, userId })),
-        skipDuplicates: true,
+  // Retry a couple of times in case two screens are registered at the same instant
+  // and compute the same key (unique-constraint race).
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const screenKey = await nextScreenKey(tx);
+        const screen = await tx.screen.create({
+          data: {
+            screenKey,
+            name: input.name,
+            location: input.location,
+            orientation: input.orientation,
+            width: req.width,
+            height: req.height,
+            devicePixelRatio: req.devicePixelRatio,
+            status: SCREEN_STATUS.ACTIVE,
+            screenGroupId: input.screenGroupId,
+          },
+        });
+        await tx.deviceCredential.create({
+          data: { screenId: screen.id, tokenHash: hashDeviceToken(deviceToken) },
+        });
+        await tx.playlist.create({ data: { screenId: screen.id } });
+        if (input.handlerIds.length > 0) {
+          await tx.screenHandler.createMany({
+            data: input.handlerIds.map((userId) => ({ screenId: screen.id, userId })),
+            skipDuplicates: true,
+          });
+        }
+        await tx.pairingRequest.update({
+          where: { id: req.id },
+          // Store the one-time token for the device to retrieve via pair-status.
+          data: { claimed: true, screenId: screen.id, deviceToken },
+        });
+        return screen;
       });
+    } catch (e) {
+      const isKeyClash =
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002' &&
+        (e.meta?.target as string[] | undefined)?.includes('screenKey');
+      if (isKeyClash && attempt < 4) continue;
+      throw e;
     }
-    await tx.pairingRequest.update({
-      where: { id: req.id },
-      // Store the one-time token for the device to retrieve via pair-status.
-      data: { claimed: true, screenId: screen.id, deviceToken },
-    });
-    return screen;
-  });
-
-  return screen;
+  }
 }
 
 // ── Admin: screen management ──
